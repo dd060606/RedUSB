@@ -1,0 +1,127 @@
+
+(kicad_symbol_lib (version 20211014) (generator kicad_symbol_editor)
+  (symbol "629004113921" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)
+    (property "Reference" "J" (id 0) (at 0.0 5.08 0)
+      (effects (font (size 1.27 1.27)) (justify bottom))
+    )
+    (property "Value" "629004113921" (id 1) (at 0.0 -10.16 0)
+      (effects (font (size 1.27 1.27)) (justify bottom))
+    )
+    (property "Footprint" "629004113921:629004113921" (id 2) (at 0 0 0)
+      (effects (font (size 1.27 1.27)) (justify bottom) hide)
+    )
+    (symbol "629004113921_0_0"
+      (polyline
+        (pts (xy -5.08 -6.985) (xy -5.08 3.81)) (stroke (width 0.254))
+      )
+      (polyline
+        (pts (xy -5.08 3.81) (xy 3.81 3.81)) (stroke (width 0.254))
+      )
+      (polyline
+        (pts (xy 3.81 -6.985) (xy -5.08 -6.985)) (stroke (width 0.254))
+      )
+      (polyline
+        (pts (xy 3.81 3.81) (xy 6.35 3.81)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 6.35 3.81) (xy 6.35 -6.985)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 6.35 -6.985) (xy 3.81 -6.985)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 3.81 -6.985) (xy 3.81 3.81)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 0.635 1.27) (xy 0.635 -0.635)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 0.635 -0.635) (xy 2.54 -0.635)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 2.54 -0.635) (xy 2.54 1.27)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 2.54 1.27) (xy 0.635 1.27)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 0.635 -1.905) (xy 0.635 -3.81)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 0.635 -3.81) (xy 2.54 -3.81)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 2.54 -3.81) (xy 2.54 -1.905)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy 2.54 -1.905) (xy 0.635 -1.905)) (stroke (width 0.127))
+      )
+      (polyline
+        (pts (xy -5.08 4.445) (xy 6.985 4.445)) (stroke (width 0.1524))
+      )
+      (polyline
+        (pts (xy 6.985 4.445) (xy 6.985 -7.62)) (stroke (width 0.1524))
+      )
+      (polyline
+        (pts (xy 6.985 -7.62) (xy -5.08 -7.62)) (stroke (width 0.1524))
+      )
+      (text "USB_Plug" (at 5.22 -3.5275 900)
+        (effects (font (size 0.8128 0.8128)) (justify bottom left))
+      )
+      (text "shield" (at 8.395 -2.8275 900)
+        (effects (font (size 1.016 1.016)) (justify bottom left))
+      )
+      (rectangle (start 5.715 -6.985) (end 6.35 3.81)
+        (stroke (width 0.1)) (fill (type outline))
+      )
+      (pin passive line (at -10.16 -5.08 0) (length 5.08)
+        (name "GND"
+          (effects (font (size 1.016 1.016)))
+        )
+        (number "4"
+          (effects (font (size 1.016 1.016)))
+        )
+      )
+      (pin passive line (at -10.16 -2.54 0) (length 5.08)
+        (name "D+"
+          (effects (font (size 1.016 1.016)))
+        )
+        (number "3"
+          (effects (font (size 1.016 1.016)))
+        )
+      )
+      (pin passive line (at -10.16 0.0 0) (length 5.08)
+        (name "D-"
+          (effects (font (size 1.016 1.016)))
+        )
+        (number "2"
+          (effects (font (size 1.016 1.016)))
+        )
+      )
+      (pin passive line (at -10.16 2.54 0) (length 5.08)
+        (name "VBUS"
+          (effects (font (size 1.016 1.016)))
+        )
+        (number "1"
+          (effects (font (size 1.016 1.016)))
+        )
+      )
+      (pin passive line (at -10.16 -7.62 0) (length 5.08)
+        (name "~"
+          (effects (font (size 1.016 1.016)))
+        )
+        (number "S1"
+          (effects (font (size 1.016 1.016)))
+        )
+      )
+      (pin passive line (at -10.16 -7.62 0) (length 5.08)
+        (name "~"
+          (effects (font (size 1.016 1.016)))
+        )
+        (number "S2"
+          (effects (font (size 1.016 1.016)))
+        )
+      )
+    )
+  )
+)
