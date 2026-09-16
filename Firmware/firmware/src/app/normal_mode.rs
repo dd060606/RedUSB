@@ -32,7 +32,19 @@ pub fn run(
         if board.button.poll(now) == Some(ButtonEvent::Pressed) {
             match (volume, catalog.current()) {
                 (Some(volume), Some(entry)) if keyboard.is_configured() => {
-                    defmt::info!("running {}", entry.name.display().as_str());
+                    // Guess the host OS from how it enumerated us, for IF_OS blocks.
+                    let os = keyboard.host_os();
+                    let fp = keyboard.fingerprint();
+                    defmt::info!(
+                        "running {}, host OS guessed as {} (ms_os={}, dev={}, cfg={}, str={})",
+                        entry.name.display().as_str(),
+                        os.name(),
+                        fp.ms_os_descriptor,
+                        fp.device_requests,
+                        fp.config_requests,
+                        fp.string_requests
+                    );
+                    interpreter.set_host_os(os);
                     // The interpreter blocks, so show a steady "busy" colour meanwhile.
                     board.led.set_pattern(Pattern::Solid(Color::WHITE));
                     board.led.tick(now);

@@ -13,6 +13,7 @@ extern crate std;
 pub mod block;
 pub mod catalog;
 pub mod fat;
+pub mod os;
 pub mod script;
 
 #[cfg(test)]

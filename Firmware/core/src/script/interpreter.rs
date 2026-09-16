@@ -1,19 +1,41 @@
 //! Executes parsed script lines against an abstract keyboard.
+//!
+//! Besides typing, the interpreter supports `IF_OS` / `ELSE` / `END_IF` blocks that
+//! run only on a given host operating system. The current OS is supplied by the
+//! firmware with [`Interpreter::set_host_os`] (see [`crate::os`]); when it is
+//! [`Os::Unknown`], only `IF_OS OTHER` / `ELSE` branches run.
 
 use super::keys::{KeyStroke, usage};
 use super::layout::Layout;
 use super::lines::{ByteSource, LineError, LineReader};
 use super::parser::{Command, ParseError, parse_line};
+use crate::os::Os;
 use heapless::Vec;
 
 /// Maximum length of one script line in bytes.
 pub const MAX_LINE_LEN: usize = 512;
+
+/// Maximum nesting depth of `IF_OS` blocks.
+pub const MAX_IF_DEPTH: usize = 8;
 
 /// Failure reported by a [`KeyboardSink`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SinkError {
     /// The host stopped accepting reports.
     Timeout,
+}
+
+/// A malformed `IF_OS` / `ELSE` / `END_IF` structure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlError {
+    /// `ELSE` with no open `IF_OS`, or a second `ELSE` in one block.
+    UnexpectedElse,
+    /// `END_IF` with no open `IF_OS`.
+    UnexpectedEndIf,
+    /// An `IF_OS` block was never closed.
+    UnterminatedIf,
+    /// `IF_OS` blocks nested deeper than [`MAX_IF_DEPTH`].
+    TooDeep,
 }
 
 /// Where key events go. The firmware implements this with the USB HID class.
@@ -36,6 +58,7 @@ pub enum RunErrorKind<E> {
     Parse(ParseError),
     Line(LineError<E>),
     Sink(SinkError),
+    Control(ControlError),
 }
 
 /// A run failure with the 1-based line it happened on.
@@ -45,12 +68,28 @@ pub struct RunError<E> {
     pub kind: RunErrorKind<E>,
 }
 
-/// Script executor. Reusable across runs; each run starts from the default layout.
+/// One open `IF_OS` block on the control-flow stack.
+#[derive(Debug, Clone, Copy)]
+struct IfFrame {
+    /// Whether the branch currently being read should execute.
+    branch_active: bool,
+    /// Whether any branch of this block has run (so `ELSE` knows to stay silent).
+    any_taken: bool,
+    /// Whether the `ELSE` of this block has already been seen.
+    else_seen: bool,
+    /// Line of the opening `IF_OS`, for error reporting.
+    open_line: u32,
+}
+
+/// Script executor. Reusable across runs; each run resets layout and delays but
+/// keeps the host OS set by the firmware.
 pub struct Interpreter {
     default_layout: Layout,
     layout: Layout,
     default_delay: u32,
+    host_os: Os,
     last_line: Vec<u8, MAX_LINE_LEN>,
+    frames: Vec<IfFrame, MAX_IF_DEPTH>,
 }
 
 impl Interpreter {
@@ -59,8 +98,20 @@ impl Interpreter {
             default_layout,
             layout: default_layout,
             default_delay: 0,
+            host_os: Os::Unknown,
             last_line: Vec::new(),
+            frames: Vec::new(),
         }
+    }
+
+    /// Sets the host OS used by `IF_OS`. The firmware calls this before each run.
+    pub fn set_host_os(&mut self, os: Os) {
+        self.host_os = os;
+    }
+
+    /// The host OS currently assumed by `IF_OS`.
+    pub fn host_os(&self) -> Os {
+        self.host_os
     }
 
     /// Runs a whole script from `src`, sending keys and delays to `host`.
@@ -72,13 +123,14 @@ impl Interpreter {
         self.layout = self.default_layout;
         self.default_delay = 0;
         self.last_line.clear();
+        self.frames.clear();
 
         let mut reader = LineReader::<MAX_LINE_LEN>::new();
         let mut line_no = 0u32;
         loop {
             let line = match reader.next_line(src) {
                 Ok(Some(line)) => line,
-                Ok(None) => return Ok(()),
+                Ok(None) => break,
                 Err(e) => {
                     return Err(RunError {
                         line: line_no + 1,
@@ -87,33 +139,104 @@ impl Interpreter {
                 }
             };
             line_no += 1;
-            let fail = |kind| RunError {
+            let cmd = parse_line(line).map_err(|e| RunError {
                 line: line_no,
-                kind,
-            };
-            let cmd = parse_line(line).map_err(|e| fail(RunErrorKind::Parse(e)))?;
+                kind: RunErrorKind::Parse(e),
+            })?;
             match cmd {
+                Command::IfOs(os) => self.enter_if(os, line_no).map_err(|e| RunError {
+                    line: line_no,
+                    kind: RunErrorKind::Control(e),
+                })?,
+                Command::Else => self.enter_else().map_err(|e| RunError {
+                    line: line_no,
+                    kind: RunErrorKind::Control(e),
+                })?,
+                Command::EndIf => self.end_if().map_err(|e| RunError {
+                    line: line_no,
+                    kind: RunErrorKind::Control(e),
+                })?,
                 Command::Repeat(count) => {
-                    // Re-parse the saved copy so the repeated command can borrow it.
-                    let saved = self.last_line.clone();
-                    let text = core::str::from_utf8(&saved).unwrap_or("");
-                    let prev = parse_line(text).map_err(|e| fail(RunErrorKind::Parse(e)))?;
-                    for _ in 0..count {
-                        self.execute(prev, host)
-                            .map_err(|e| fail(RunErrorKind::Sink(e)))?;
+                    if self.executing() {
+                        // Re-parse the saved copy so the repeated command can borrow it.
+                        let saved = self.last_line.clone();
+                        let text = core::str::from_utf8(&saved).unwrap_or("");
+                        let prev = parse_line(text).map_err(|e| RunError {
+                            line: line_no,
+                            kind: RunErrorKind::Parse(e),
+                        })?;
+                        for _ in 0..count {
+                            self.execute(prev, host).map_err(|e| RunError {
+                                line: line_no,
+                                kind: RunErrorKind::Sink(e),
+                            })?;
+                        }
                     }
                 }
                 other => {
-                    let executed = self
-                        .execute(other, host)
-                        .map_err(|e| fail(RunErrorKind::Sink(e)))?;
-                    if executed {
-                        self.last_line.clear();
-                        let _ = self.last_line.extend_from_slice(line.as_bytes());
+                    if self.executing() {
+                        let executed = self.execute(other, host).map_err(|e| RunError {
+                            line: line_no,
+                            kind: RunErrorKind::Sink(e),
+                        })?;
+                        if executed {
+                            self.last_line.clear();
+                            let _ = self.last_line.extend_from_slice(line.as_bytes());
+                        }
                     }
                 }
             }
         }
+        if let Some(frame) = self.frames.first() {
+            return Err(RunError {
+                line: frame.open_line,
+                kind: RunErrorKind::Control(ControlError::UnterminatedIf),
+            });
+        }
+        Ok(())
+    }
+
+    /// Whether the current line should run: every open block is on an active branch.
+    fn executing(&self) -> bool {
+        self.frames.iter().all(|f| f.branch_active)
+    }
+
+    fn enter_if(&mut self, os: Os, line: u32) -> Result<(), ControlError> {
+        let parent_active = self.executing();
+        let active = parent_active && os == self.host_os;
+        self.frames
+            .push(IfFrame {
+                branch_active: active,
+                any_taken: active,
+                else_seen: false,
+                open_line: line,
+            })
+            .map_err(|_| ControlError::TooDeep)
+    }
+
+    fn enter_else(&mut self) -> Result<(), ControlError> {
+        let depth = self.frames.len();
+        if depth == 0 {
+            return Err(ControlError::UnexpectedElse);
+        }
+        // The block runs only if its parent runs and no earlier branch was taken.
+        let parent_active = self.frames[..depth - 1].iter().all(|f| f.branch_active);
+        let frame = &mut self.frames[depth - 1];
+        if frame.else_seen {
+            return Err(ControlError::UnexpectedElse);
+        }
+        frame.else_seen = true;
+        let active = parent_active && !frame.any_taken;
+        frame.branch_active = active;
+        frame.any_taken |= active;
+        Ok(())
+    }
+
+    fn end_if(&mut self) -> Result<(), ControlError> {
+        self.frames
+            .pop()
+            .map(|_| ())
+            .ok_or(ControlError::UnexpectedEndIf)
     }
 
     /// Executes one command. Returns whether it was a repeatable action.
@@ -122,7 +245,12 @@ impl Interpreter {
         H: KeyboardSink + Delay,
     {
         match cmd {
-            Command::Empty | Command::Repeat(_) => return Ok(false),
+            // Structural and no-op commands are handled by `run` or do nothing here.
+            Command::Empty
+            | Command::Repeat(_)
+            | Command::IfOs(_)
+            | Command::Else
+            | Command::EndIf => return Ok(false),
             Command::DefaultDelay(ms) => {
                 self.default_delay = ms;
                 return Ok(false);
@@ -204,9 +332,15 @@ mod tests {
     }
 
     fn run(script: &str) -> Result<StdVec<Ev>, RunError<core::convert::Infallible>> {
+        run_on(script, Os::Unknown)
+    }
+
+    fn run_on(script: &str, os: Os) -> Result<StdVec<Ev>, RunError<core::convert::Infallible>> {
         let mut host = Recorder::default();
         let mut src = script.as_bytes();
-        Interpreter::new(Layout::Us).run(&mut src, &mut host)?;
+        let mut interp = Interpreter::new(Layout::Us);
+        interp.set_host_os(os);
+        interp.run(&mut src, &mut host)?;
         Ok(host.events)
     }
 
@@ -288,10 +422,101 @@ mod tests {
             ..Default::default()
         };
         let mut src = "STRING abc".as_bytes();
-        let err = Interpreter::new(Layout::Us)
-            .run(&mut src, &mut host)
-            .unwrap_err();
+        let mut interp = Interpreter::new(Layout::Us);
+        let err = interp.run(&mut src, &mut host).unwrap_err();
         assert_eq!(err.kind, RunErrorKind::Sink(SinkError::Timeout));
         assert_eq!(host.events.len(), 2);
+    }
+
+    const OS_SCRIPT: &str = "IF_OS WINDOWS\nSTRING w\nELSE\nSTRING o\nEND_IF\nENTER";
+
+    #[test]
+    fn if_os_runs_matching_branch() {
+        let ev = run_on(OS_SCRIPT, Os::Windows).unwrap();
+        let mut expected = StdVec::new();
+        expected.extend(tap(usage::W, 0));
+        expected.extend(tap(usage::ENTER, 0));
+        assert_eq!(ev, expected);
+    }
+
+    #[test]
+    fn if_os_runs_else_branch() {
+        let ev = run_on(OS_SCRIPT, Os::Linux).unwrap();
+        let mut expected = StdVec::new();
+        expected.extend(tap(usage::O, 0));
+        expected.extend(tap(usage::ENTER, 0));
+        assert_eq!(ev, expected);
+    }
+
+    #[test]
+    fn unknown_os_takes_else() {
+        let ev = run_on(OS_SCRIPT, Os::Unknown).unwrap();
+        let mut expected = StdVec::new();
+        expected.extend(tap(usage::O, 0));
+        expected.extend(tap(usage::ENTER, 0));
+        assert_eq!(ev, expected);
+    }
+
+    #[test]
+    fn if_os_without_else_skips_when_no_match() {
+        let ev = run_on("IF_OS MAC\nSTRING x\nEND_IF\nENTER", Os::Windows).unwrap();
+        assert_eq!(ev, tap(usage::ENTER, 0));
+    }
+
+    #[test]
+    fn nested_conditionals() {
+        let script =
+            "IF_OS LINUX\nSTRING a\nIF_OS WINDOWS\nSTRING b\nELSE\nSTRING c\nEND_IF\nEND_IF";
+        let ev = run_on(script, Os::Linux).unwrap();
+        let mut expected = StdVec::new();
+        expected.extend(tap(usage::A, 0));
+        expected.extend(tap(usage::C, 0));
+        assert_eq!(ev, expected);
+        // The whole outer block is skipped, inner structure included, on a mismatch.
+        assert!(run_on(script, Os::MacOs).unwrap().is_empty());
+    }
+
+    #[test]
+    fn repeat_inside_skipped_branch_is_ignored() {
+        let ev = run_on("IF_OS WINDOWS\nSTRING a\nREPEAT 5\nEND_IF", Os::Linux).unwrap();
+        assert!(ev.is_empty());
+    }
+
+    #[test]
+    fn else_without_if_errors() {
+        let err = run("STRING a\nELSE").unwrap_err();
+        assert_eq!(err.line, 2);
+        assert_eq!(
+            err.kind,
+            RunErrorKind::Control(ControlError::UnexpectedElse)
+        );
+    }
+
+    #[test]
+    fn endif_without_if_errors() {
+        let err = run("END_IF").unwrap_err();
+        assert_eq!(
+            err.kind,
+            RunErrorKind::Control(ControlError::UnexpectedEndIf)
+        );
+    }
+
+    #[test]
+    fn unterminated_if_errors_at_open_line() {
+        let err = run_on("ENTER\nIF_OS WINDOWS\nSTRING x", Os::Windows).unwrap_err();
+        assert_eq!(err.line, 2);
+        assert_eq!(
+            err.kind,
+            RunErrorKind::Control(ControlError::UnterminatedIf)
+        );
+    }
+
+    #[test]
+    fn double_else_errors() {
+        let err = run_on("IF_OS WINDOWS\nELSE\nELSE\nEND_IF", Os::Windows).unwrap_err();
+        assert_eq!(
+            err.kind,
+            RunErrorKind::Control(ControlError::UnexpectedElse)
+        );
     }
 }

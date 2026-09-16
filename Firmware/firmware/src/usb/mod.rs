@@ -2,6 +2,7 @@
 //! configuration mode. Both share the vendor ID and strings; the product ID
 //! differs so hosts never reuse a cached descriptor from the other mode.
 
+pub mod fingerprint;
 pub mod keyboard;
 pub mod mass_storage;
 

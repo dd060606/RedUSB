@@ -82,6 +82,9 @@ order of their 8.3 name, so prefix them with numbers (`01_...`, `02_...`).
 | `DEFAULT_DELAY ms`        | Extra wait after every following command (`DEFAULTDELAY` too).                          |
 | `REPEAT n`                | Repeats the previous command `n` more times.                                            |
 | `LAYOUT US` / `LAYOUT FR` | Host layout used by `STRING` (default: US, see `app/mod.rs`).                           |
+| `IF_OS <os>`              | Start a block that runs only on `<os>`: `WINDOWS`, `MAC`, `LINUX`, or `OTHER`.          |
+| `ELSE`                    | Alternative branch of the enclosing `IF_OS`.                                            |
+| `END_IF`                  | Ends the enclosing `IF_OS` block (`ENDIF` too).                                         |
 | key combo                 | Modifiers then at most one key: `CTRL ALT t`, `GUI r`, `CTRL-SHIFT ESC`, `ENTER`, `F5`. |
 
 Modifiers: `CTRL`/`CONTROL`, `SHIFT`, `ALT`, `GUI`/`WINDOWS`/`COMMAND`, `ALTGR`.
@@ -91,7 +94,34 @@ Keys: `ENTER`, `ESC`, `TAB`, `SPACE`, `BACKSPACE`, `DELETE`, `INSERT`, `HOME`,
 `NUMLOCK`, `SCROLLLOCK`, `PRINTSCREEN`, `PAUSE`, `MENU`, `F1`..`F12`, and any single
 letter or digit (`CTRL c`).
 
-Limits: 512 bytes per line, 16 scripts, root directory only.
+Limits: 512 bytes per line, 16 scripts, root directory only, `IF_OS` nested up to 8
+deep.
+
+### Host OS detection
+
+`IF_OS` runs a block only on a given operating system. The device cannot ask the
+host what it is, so it guesses from the pattern of USB descriptor requests the host
+makes while enumerating the keyboard:
+
+- **Windows** is detected reliably: it is the only OS that probes for the Microsoft
+  OS string descriptor (string index `0xEE`).
+- **Linux vs macOS** is a best-effort guess from how many times the host reads the
+  configuration descriptor. Calibrate the threshold in `core/src/os.rs`
+  (`LINUX_MIN_CONFIG_REQUESTS`) against your own machines; the firmware logs the raw
+  counters over defmt each time a script runs.
+- An unrecognised host stays `unknown`; write an `ELSE` (or `IF_OS OTHER`) branch to
+  cover it.
+
+```
+IF_OS WINDOWS
+  GUI r
+  STRINGLN cmd
+ELSE
+  CTRL ALT t
+END_IF
+```
+
+See `scripts/03_os_aware.txt` for a fuller example.
 
 ## LED legend
 

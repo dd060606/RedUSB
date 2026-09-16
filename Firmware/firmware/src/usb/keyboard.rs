@@ -1,7 +1,9 @@
 //! USB HID boot keyboard used to play macros.
 
+use super::fingerprint::OsFingerprint;
 use super::{PID_KEYBOARD, build_device};
 use crate::board::millis;
+use redusb_core::os::Os;
 use redusb_core::script::{Delay, KeyStroke, KeyboardSink, SinkError};
 use rp2040_hal::Timer;
 use rp2040_hal::usb::UsbBus;
@@ -22,6 +24,7 @@ const SEND_TIMEOUT_MS: u64 = 1000;
 
 pub struct UsbKeyboard {
     hid: HIDClass<'static, UsbBus>,
+    fingerprint: OsFingerprint,
     device: UsbDevice<'static, UsbBus>,
     timer: Timer,
 }
@@ -41,16 +44,35 @@ impl UsbKeyboard {
             settings,
         );
         let device = build_device(alloc, PID_KEYBOARD, "RedUSB Macro Keyboard", false);
-        Self { hid, device, timer }
+        Self {
+            hid,
+            fingerprint: OsFingerprint::new(),
+            device,
+            timer,
+        }
     }
 
     /// Services the bus. Call it continuously.
+    ///
+    /// The fingerprint class is polled first so it observes every enumeration
+    /// request before the HID class or the standard handler consumes it.
     pub fn poll(&mut self) -> bool {
-        self.device.poll(&mut [&mut self.hid])
+        self.device
+            .poll(&mut [&mut self.fingerprint, &mut self.hid])
     }
 
     pub fn is_configured(&self) -> bool {
         self.device.state() == UsbDeviceState::Configured
+    }
+
+    /// The host OS guessed from enumeration (see [`redusb_core::os`]).
+    pub fn host_os(&self) -> Os {
+        self.fingerprint.host_os()
+    }
+
+    /// Raw enumeration counters, for logging and heuristic calibration.
+    pub fn fingerprint(&self) -> redusb_core::os::Fingerprint {
+        self.fingerprint.fingerprint()
     }
 
     /// Queues a report, servicing the bus until the endpoint accepts it.

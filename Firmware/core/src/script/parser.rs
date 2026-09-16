@@ -6,11 +6,14 @@
 //! * `DELAY ms`, `DEFAULT_DELAY ms` (also `DEFAULTDELAY`).
 //! * `REPEAT n`: run the previous command again `n` times.
 //! * `LAYOUT US|FR`: layout used by `STRING`, defaults to the firmware setting.
+//! * `IF_OS WINDOWS|MAC|LINUX|OTHER` .. `ELSE` .. `END_IF`: run a block only on a
+//!   given host OS (see [`crate::os`]).
 //! * Key combos: modifiers followed by at most one key, e.g. `CTRL ALT t`, `GUI r`,
 //!   `CTRL-SHIFT ESC`, `ENTER`, `F5`, `DOWNARROW`.
 
 use super::keys::{KeyStroke, key_by_name, modifier_by_name};
 use super::layout::Layout;
+use crate::os::Os;
 
 /// One parsed script line. Text payloads borrow from the input line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,6 +26,12 @@ pub enum Command<'a> {
     DefaultDelay(u32),
     Repeat(u32),
     Layout(Layout),
+    /// Start of a block that runs only on `os`.
+    IfOs(Os),
+    /// The alternative branch of the enclosing `IF_OS`.
+    Else,
+    /// End of the enclosing `IF_OS` block.
+    EndIf,
     Keys(KeyStroke),
 }
 
@@ -35,6 +44,7 @@ pub enum ParseError {
     UnknownKey,
     TooManyKeys,
     UnknownLayout,
+    UnknownOs,
 }
 
 /// Splits `line` at the first blank: the command word and everything after that
@@ -108,6 +118,16 @@ pub fn parse_line(line: &str) -> Result<Command<'_>, ParseError> {
             return Err(ParseError::MissingArgument);
         }
         Command::Layout(Layout::from_name(name).ok_or(ParseError::UnknownLayout)?)
+    } else if head.eq_ignore_ascii_case("IF_OS") {
+        let name = rest.trim();
+        if name.is_empty() {
+            return Err(ParseError::MissingArgument);
+        }
+        Command::IfOs(Os::from_name(name).ok_or(ParseError::UnknownOs)?)
+    } else if head.eq_ignore_ascii_case("ELSE") {
+        Command::Else
+    } else if head.eq_ignore_ascii_case("END_IF") || head.eq_ignore_ascii_case("ENDIF") {
+        Command::EndIf
     } else {
         Command::Keys(parse_keys(line)?)
     };
@@ -210,5 +230,17 @@ mod tests {
         assert_eq!(parse_line("FROBNICATE"), Err(ParseError::UnknownCommand));
         assert_eq!(parse_line("CTRL FROB"), Err(ParseError::UnknownKey));
         assert_eq!(parse_line("a b"), Err(ParseError::TooManyKeys));
+    }
+
+    #[test]
+    fn os_conditionals() {
+        assert_eq!(parse_line("IF_OS WINDOWS"), Ok(Command::IfOs(Os::Windows)));
+        assert_eq!(parse_line("if_os linux"), Ok(Command::IfOs(Os::Linux)));
+        assert_eq!(parse_line("IF_OS OTHER"), Ok(Command::IfOs(Os::Unknown)));
+        assert_eq!(parse_line("ELSE"), Ok(Command::Else));
+        assert_eq!(parse_line("END_IF"), Ok(Command::EndIf));
+        assert_eq!(parse_line("ENDIF"), Ok(Command::EndIf));
+        assert_eq!(parse_line("IF_OS"), Err(ParseError::MissingArgument));
+        assert_eq!(parse_line("IF_OS BEOS"), Err(ParseError::UnknownOs));
     }
 }
