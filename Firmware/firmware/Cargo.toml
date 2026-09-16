@@ -1,0 +1,30 @@
+[package]
+name = "redusb-firmware"
+description = "RedUSB macro keyboard firmware for the Adafruit KB2040 (RP2040)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+redusb-core = { path = "../core" }
+
+rp2040-hal = { version = "0.11", features = ["rt", "critical-section-impl", "rom-func-cache"] }
+rp2040-boot2 = "0.3"
+rp2040-flash = "0.6"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+embedded-hal = "1.0"
+
+usb-device = "0.3"
+usbd-hid = "0.10"
+usbd-storage = { version = "3.0", default-features = false, features = ["bbb", "scsi"] }
+
+heapless = "0.9"
+static_cell = "2"
+# Cortex-M0+ has no CAS instructions: emulate atomics with critical sections.
+portable-atomic = { version = "1", features = ["critical-section"] }
+
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }

@@ -1,0 +1,10 @@
+[package]
+name = "redusb-core"
+description = "Hardware-independent logic of the RedUSB firmware: FAT12/16 volume access, Ducky Script parsing and execution, script catalog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+heapless = "0.9"

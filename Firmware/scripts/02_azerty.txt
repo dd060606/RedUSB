@@ -1,0 +1,11 @@
+REM Example macro for a French (AZERTY) host.
+REM LAYOUT tells the device which physical keys produce each character.
+LAYOUT FR
+DEFAULT_DELAY 30
+GUI r
+DELAY 500
+STRINGLN notepad
+DELAY 1000
+STRINGLN Bonjour ! Caractères accentués : é è à ç ù â ê î ô û ë ï ü
+STRINGLN Symboles : @ # { } [ ] | \ ^ ~ ` € $ % * , ; : ! ? < >
+STRINGLN Chiffres : 0123456789
