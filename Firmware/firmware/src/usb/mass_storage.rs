@@ -2,7 +2,7 @@
 //! `usbd-storage` handles the transport; this module answers SCSI commands against the
 //! [`CachedFlashDevice`], keeping per-command progress in [`Handler`] across polls for large transfers.
 
-use super::{PID_STORAGE, build_device};
+use super::{PID_STORAGE, STORAGE_RELEASE, VID, build_device};
 use crate::storage::cached::CachedFlashDevice;
 use redusb_core::block::{BLOCK_SIZE, Block, BlockDevice};
 use rp2040_hal::usb::UsbBus;
@@ -282,7 +282,7 @@ impl UsbDrive {
         static IO_BUFFER: StaticCell<[u8; IO_BUFFER_SIZE]> = StaticCell::new();
         let buffer: &'static mut [u8] = IO_BUFFER.init([0; IO_BUFFER_SIZE]);
         let scsi = Scsi::new(alloc, USB_PACKET_SIZE, 0, buffer).expect("scsi class");
-        let device = build_device(alloc, PID_STORAGE, "RedUSB Config Drive", true);
+        let device = build_device(alloc, VID, PID_STORAGE, "RedUSB", "RedUSB Config Drive", Some("REDUSB-0001"), true, STORAGE_RELEASE);
         Self {
             scsi,
             device,

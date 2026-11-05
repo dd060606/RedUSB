@@ -1,7 +1,7 @@
 //! USB HID boot keyboard used to play macros.
 
 use super::fingerprint::OsFingerprint;
-use super::{PID_KEYBOARD, build_device};
+use super::{build_device, select_keyboard_profile};
 use crate::board::millis;
 use redusb_core::os::Os;
 use redusb_core::script::{Delay, KeyStroke, KeyboardSink, SinkError};
@@ -17,8 +17,10 @@ use usbd_hid::hid_class::{
 
 /// Interval requested from the host between interrupt IN polls.
 const POLL_INTERVAL_MS: u8 = 1;
-/// How long a key stays pressed, and how long the release lasts before the next key.
+/// Base duration a key stays pressed and a release lasts before the next key.
 pub const KEY_HOLD_MS: u32 = 8;
+/// Maximum random jitter added on top of KEY_HOLD_MS per press/release (ms).
+const JITTER_MAX_MS: u32 = 10;
 /// Give up on a report if the host has not fetched the previous one by then.
 const SEND_TIMEOUT_MS: u64 = 1000;
 
@@ -27,10 +29,22 @@ pub struct UsbKeyboard {
     fingerprint: OsFingerprint,
     device: UsbDevice<'static, UsbBus>,
     timer: Timer,
+    /// Xorshift32 PRNG state for per-keystroke timing jitter, seeded from boot entropy.
+    prng_state: u32,
+}
+
+/// Advances a 32-bit xorshift PRNG and returns the new state.
+fn xorshift32(state: &mut u32) -> u32 {
+    let mut x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    x
 }
 
 impl UsbKeyboard {
-    pub fn new(alloc: &'static UsbBusAllocator<UsbBus>, timer: Timer) -> Self {
+    pub fn new(alloc: &'static UsbBusAllocator<UsbBus>, timer: Timer, release: u16) -> Self {
         let settings = HidClassSettings {
             subclass: HidSubClass::Boot,
             protocol: HidProtocol::Keyboard,
@@ -43,12 +57,31 @@ impl UsbKeyboard {
             POLL_INTERVAL_MS,
             settings,
         );
-        let device = build_device(alloc, PID_KEYBOARD, "RedUSB Macro Keyboard", false);
+        let profile = select_keyboard_profile(release);
+        defmt::info!(
+            "usb keyboard: {=str} {=str} release {=u16:#06x}",
+            profile.manufacturer,
+            profile.product,
+            release
+        );
+        let device = build_device(
+            alloc,
+            profile.vid,
+            profile.pid,
+            profile.manufacturer,
+            profile.product,
+            None, // most commodity keyboards ship without a serial-number descriptor
+            false,
+            release,
+        );
+        // Seed the PRNG from boot entropy; multiplicative mix avoids a near-zero state.
+        let prng_state = (release as u32).wrapping_mul(0x9E37_79B9) ^ 0xDEAD_CAFE;
         Self {
             hid,
             fingerprint: OsFingerprint::new(),
             device,
             timer,
+            prng_state,
         }
     }
 
@@ -101,13 +134,15 @@ impl KeyboardSink for UsbKeyboard {
             keycodes: [stroke.usage, 0, 0, 0, 0, 0],
         };
         self.send(&report)?;
-        self.delay_ms(KEY_HOLD_MS);
+        let jitter = xorshift32(&mut self.prng_state) % (JITTER_MAX_MS + 1);
+        self.delay_ms(KEY_HOLD_MS + jitter);
         Ok(())
     }
 
     fn release(&mut self) -> Result<(), SinkError> {
         self.send(&KeyboardReport::default())?;
-        self.delay_ms(KEY_HOLD_MS);
+        let jitter = xorshift32(&mut self.prng_state) % (JITTER_MAX_MS + 1);
+        self.delay_ms(KEY_HOLD_MS + jitter);
         Ok(())
     }
 }

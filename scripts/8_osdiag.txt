@@ -1,0 +1,10 @@
+REM Test 8 - OS fingerprint diagnostic (OS_REPORT)
+REM Types the detected OS plus the raw USB enumeration counters. OS detection is
+REM best-effort: Windows caches the Microsoft OS descriptor after the first plug, so
+REM later connections fall back to a heuristic. Run this on each OS and report the
+REM line so the Windows/Mac/Linux thresholds can be calibrated.
+DELAY 1500
+STRINGLN === RedUSB test 8: OS fingerprint ===
+OS_REPORT
+ENTER
+STRINGLN Report the OS=... line above for each host OS to calibrate IF_OS.

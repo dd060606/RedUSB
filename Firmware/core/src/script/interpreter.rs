@@ -5,8 +5,9 @@ use super::keys::{KeyStroke, usage};
 use super::layout::Layout;
 use super::lines::{ByteSource, LineError, LineReader};
 use super::parser::{Command, ParseError, parse_line};
-use crate::os::Os;
-use heapless::Vec;
+use crate::os::{Fingerprint, Os};
+use core::fmt::Write;
+use heapless::{String, Vec};
 
 /// Maximum length of one script line in bytes.
 pub const MAX_LINE_LEN: usize = 512;
@@ -84,6 +85,7 @@ pub struct Interpreter {
     layout: Layout,
     default_delay: u32,
     host_os: Os,
+    fingerprint: Fingerprint,
     last_line: Vec<u8, MAX_LINE_LEN>,
     frames: Vec<IfFrame, MAX_IF_DEPTH>,
 }
@@ -95,6 +97,7 @@ impl Interpreter {
             layout: default_layout,
             default_delay: 0,
             host_os: Os::Unknown,
+            fingerprint: Fingerprint::new(),
             last_line: Vec::new(),
             frames: Vec::new(),
         }
@@ -103,6 +106,11 @@ impl Interpreter {
     /// Sets the host OS used by `IF_OS`. The firmware calls this before each run.
     pub fn set_host_os(&mut self, os: Os) {
         self.host_os = os;
+    }
+
+    /// Sets the raw enumeration fingerprint typed by `OS_REPORT`.
+    pub fn set_fingerprint(&mut self, fingerprint: Fingerprint) {
+        self.fingerprint = fingerprint;
     }
 
     /// The host OS currently assumed by `IF_OS`.
@@ -260,6 +268,7 @@ impl Interpreter {
                 self.type_text(text, host)?;
                 tap(host, KeyStroke::key(usage::ENTER))?;
             }
+            Command::OsReport => self.type_report(host)?,
             Command::Delay(ms) => host.delay_ms(ms),
             Command::Keys(stroke) => tap(host, stroke)?,
         }
@@ -279,6 +288,25 @@ impl Interpreter {
             }
         }
         Ok(())
+    }
+
+    /// Types the detected OS and raw enumeration counters on one line, for calibration.
+    fn type_report<H: KeyboardSink>(&self, host: &mut H) -> Result<(), SinkError> {
+        let fp = &self.fingerprint;
+        let mut line: String<128> = String::new();
+        let _ = write!(
+            line,
+            "OS={} ms_os={} dev={} cfg={} str={} qual={} bos={} other={}",
+            self.host_os.name(),
+            fp.ms_os_descriptor as u8,
+            fp.device_requests,
+            fp.config_requests,
+            fp.string_requests,
+            fp.qualifier_requests,
+            fp.bos_requests,
+            fp.other_requests,
+        );
+        self.type_text(line.as_str(), host)
     }
 }
 

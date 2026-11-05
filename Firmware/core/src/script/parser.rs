@@ -22,6 +22,8 @@ pub enum Command<'a> {
     Else,
     /// End of the enclosing `IF_OS` block.
     EndIf,
+    /// Types the detected host OS and raw enumeration counters, for calibration.
+    OsReport,
     Keys(KeyStroke),
 }
 
@@ -118,6 +120,8 @@ pub fn parse_line(line: &str) -> Result<Command<'_>, ParseError> {
         Command::Else
     } else if head.eq_ignore_ascii_case("END_IF") || head.eq_ignore_ascii_case("ENDIF") {
         Command::EndIf
+    } else if head.eq_ignore_ascii_case("OS_REPORT") || head.eq_ignore_ascii_case("OSREPORT") {
+        Command::OsReport
     } else {
         Command::Keys(parse_keys(line)?)
     };
@@ -232,5 +236,11 @@ mod tests {
         assert_eq!(parse_line("ENDIF"), Ok(Command::EndIf));
         assert_eq!(parse_line("IF_OS"), Err(ParseError::MissingArgument));
         assert_eq!(parse_line("IF_OS BEOS"), Err(ParseError::UnknownOs));
+    }
+
+    #[test]
+    fn os_report_command() {
+        assert_eq!(parse_line("OS_REPORT"), Ok(Command::OsReport));
+        assert_eq!(parse_line("osreport"), Ok(Command::OsReport));
     }
 }

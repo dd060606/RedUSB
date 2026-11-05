@@ -34,6 +34,8 @@ pub struct Board {
     pub timer: Timer,
     pub watchdog: Watchdog,
     pub usb_bus: &'static UsbBusAllocator<UsbBus>,
+    /// Per-boot random value, used to rotate the keyboard's USB release number.
+    pub boot_entropy: u16,
 }
 
 impl Board {
@@ -52,6 +54,8 @@ impl Board {
         ) else {
             panic!("clock init failed");
         };
+
+        let boot_entropy = sample_entropy(&pac.ROSC);
 
         let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
         let sio = Sio::new(pac.SIO);
@@ -89,6 +93,7 @@ impl Board {
             timer,
             watchdog,
             usb_bus,
+            boot_entropy,
         }
     }
 }
@@ -96,4 +101,14 @@ impl Board {
 /// Milliseconds since boot.
 pub fn millis(timer: Timer) -> u64 {
     timer.get_counter().ticks() / 1000
+}
+
+/// Samples 16 bits from the ring oscillator for a per-boot random value.
+fn sample_entropy(rosc: &pac::ROSC) -> u16 {
+    let mut value = 0u16;
+    for _ in 0..16 {
+        value = (value << 1) | rosc.randombit().read().randombit().bit() as u16;
+        cortex_m::asm::delay(200);
+    }
+    value
 }

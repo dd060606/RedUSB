@@ -16,7 +16,9 @@ use redusb_core::script::{ByteSource, Interpreter, RunErrorKind};
 const ERROR_FLASH_MS: u32 = 1500;
 
 /// Time the host must keep us configured before the script auto-runs, so its HID
-/// driver is bound and the first keystrokes are not missed.
+/// driver is bound and the first keystrokes are not missed. Generous because the
+/// per-boot USB release number makes the host treat us as a new device and re-run
+/// its device setup on every connection.
 const AUTORUN_SETTLE_MS: u64 = 1000;
 
 pub fn run(
@@ -25,7 +27,7 @@ pub fn run(
     volume: Option<FatVolume>,
     catalog: ScriptCatalog,
 ) -> ! {
-    let mut keyboard = UsbKeyboard::new(board.usb_bus, board.timer);
+    let mut keyboard = UsbKeyboard::new(board.usb_bus, board.timer, board.boot_entropy);
     let mut interpreter = Interpreter::new(DEFAULT_LAYOUT);
     let idle = idle_pattern(&catalog);
     board.led.set_pattern(idle);
@@ -67,6 +69,7 @@ pub fn run(
                         fp.string_requests
                     );
                     interpreter.set_host_os(os);
+                    interpreter.set_fingerprint(fp);
                     // The interpreter blocks, so show a steady "busy" colour meanwhile.
                     board.led.set_pattern(Pattern::Solid(Color::WHITE));
                     board.led.tick(now);

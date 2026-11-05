@@ -1,12 +1,17 @@
-REM Test 2 - keys and combos: ENTER, TAB, arrows, HOME/END, CTRL+A
-REM Expected: safe editing actions in a text editor. Nothing is launched or deleted.
-REM Give a text editor focus before this runs.
+REM Test 2 - navigation and editing keys: ENTER, TAB, arrows, HOME/END, BACKSPACE
+REM Expected: safe editing in a text editor only. No Ctrl/Alt/GUI combos, so nothing
+REM is launched. (Modifier combos are app-dependent; the GUI combo is tested by 7_app.)
+REM Give a plain text editor focus before this runs.
 DEFAULT_DELAY 150
 DELAY 1500
-STRINGLN === RedUSB test 2: keys and combos ===
+STRINGLN === RedUSB test 2: navigation and editing keys ===
 STRING abc
 ENTER
-STRING def
+STRING defXX
+DELAY 300
+REM delete the two X with backspace
+BACKSPACE
+BACKSPACE
 DELAY 300
 REM jump to line start, step right twice, insert a marker, jump to end
 HOME
@@ -14,12 +19,7 @@ RIGHT
 RIGHT
 STRING [mid]
 END
-DELAY 300
-REM select-all then move to end (no delete), proving CTRL+A fires
-CTRL a
-DELAY 400
-END
 ENTER
-STRINGLN Keys OK: enter, arrows, home/end, ctrl+a all fired.
+STRINGLN Keys OK: enter, backspace, arrows, home/end all fired.
 TAB
 STRINGLN (this line should start with a tab indent, proving TAB works)
