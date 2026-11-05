@@ -1,4 +1,5 @@
-//! Normal mode: the device is a keyboard, the button plays the selected script.
+//! Normal mode: the device is a keyboard; the selected script auto-runs once the host
+//! has configured it, and replays on every button press.
 
 use super::DEFAULT_LAYOUT;
 use crate::board::{Board, millis};
@@ -14,6 +15,10 @@ use redusb_core::script::{ByteSource, Interpreter, RunErrorKind};
 /// Red flash after a failed or missing script.
 const ERROR_FLASH_MS: u32 = 1500;
 
+/// Time the host must keep us configured before the script auto-runs, so its HID
+/// driver is bound and the first keystrokes are not missed.
+const AUTORUN_SETTLE_MS: u64 = 1000;
+
 pub fn run(
     mut board: Board,
     mut storage: CachedFlashDevice,
@@ -25,13 +30,30 @@ pub fn run(
     let idle = idle_pattern(&catalog);
     board.led.set_pattern(idle);
 
+    // Auto-run the selected script once the host has kept us configured long enough to
+    // bind its HID driver; the button still re-runs on demand. A replug power-cycles the
+    // bus-powered board, so every connection re-arms the auto-run from a fresh boot.
+    let mut configured_since: Option<u64> = None;
+    let mut autorun_done = false;
+
     loop {
         let now = millis(board.timer);
         keyboard.poll();
 
-        if board.button.poll(now) == Some(ButtonEvent::Pressed) {
+        let autorun = if autorun_done {
+            false
+        } else if keyboard.is_configured() {
+            now.wrapping_sub(*configured_since.get_or_insert(now)) >= AUTORUN_SETTLE_MS
+        } else {
+            configured_since = None;
+            false
+        };
+        let pressed = board.button.poll(now) == Some(ButtonEvent::Pressed);
+
+        if autorun || pressed {
             match (volume, catalog.current()) {
                 (Some(volume), Some(entry)) if keyboard.is_configured() => {
+                    autorun_done = true;
                     // Guess the host OS from how it enumerated us, for IF_OS blocks.
                     let os = keyboard.host_os();
                     let fp = keyboard.fingerprint();
@@ -69,6 +91,8 @@ pub fn run(
                     board.led.set_pattern(idle);
                 }
                 _ => {
+                    // Latch a scriptless auto-run so it does not retry every loop.
+                    autorun_done |= autorun;
                     defmt::warn!("no script to run");
                     board.led.flash(Color::RED, ERROR_FLASH_MS, now);
                 }
