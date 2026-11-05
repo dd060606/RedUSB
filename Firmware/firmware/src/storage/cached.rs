@@ -1,8 +1,7 @@
-//! 512-byte block device over the flash volume, with a one-sector write-back cache.
-//!
-//! USB hosts write 512-byte blocks but the flash erases 4 KiB at a time. Writes are
-//! collected in a RAM copy of the affected flash sector and committed when the host
-//! moves on to another sector, when the bus goes idle, or on an explicit flush.
+//! 512-byte block device over the flash volume with a small multi-sector write-back
+//! cache. Flash erases 4 KiB at a time, so writes are buffered and committed only when
+//! the bus goes idle or on flush. Caching several sectors keeps a whole small-file write
+//! (data + FAT + directory) in RAM, so no blocking erase stalls the USB stack mid-transfer.
 
 use super::flash::Flash;
 use super::layout::{FLASH_SECTOR_SIZE, VOLUME_BLOCKS, VOLUME_OFFSET};
@@ -13,25 +12,47 @@ const BLOCKS_PER_SECTOR: u32 = (FLASH_SECTOR_SIZE / BLOCK_SIZE) as u32;
 /// Commit pending writes after this much time without a new write.
 pub const IDLE_FLUSH_MS: u64 = 150;
 
-pub struct CachedFlashDevice {
-    flash: Flash,
-    /// Flash offset of the cached sector, if any.
-    cached: Option<u32>,
+/// Sectors held in RAM at once. Four covers a small write's data sector, both FAT
+/// copies and the root directory, so an ordinary upload never evicts mid-transfer.
+const CACHE_SECTORS: usize = 4;
+
+/// One cached 4 KiB flash sector.
+struct Slot {
+    /// Flash offset of the sector held here, or `None` when the slot is free.
+    offset: Option<u32>,
     dirty: bool,
     buf: [u8; FLASH_SECTOR_SIZE],
+}
+
+impl Slot {
+    fn empty() -> Self {
+        Self {
+            offset: None,
+            dirty: false,
+            buf: [0xFF; FLASH_SECTOR_SIZE],
+        }
+    }
+}
+
+pub struct CachedFlashDevice {
+    flash: Flash,
+    slots: [Slot; CACHE_SECTORS],
+    /// Round-robin victim used only when every slot is already dirty.
+    next_victim: usize,
     now_ms: u64,
     last_write_ms: u64,
+    dirty: bool,
 }
 
 impl CachedFlashDevice {
     pub fn new(flash: Flash) -> Self {
         Self {
             flash,
-            cached: None,
-            dirty: false,
-            buf: [0xFF; FLASH_SECTOR_SIZE],
+            slots: core::array::from_fn(|_| Slot::empty()),
+            next_victim: 0,
             now_ms: 0,
             last_write_ms: 0,
+            dirty: false,
         }
     }
 
@@ -40,13 +61,12 @@ impl CachedFlashDevice {
         &mut self.flash
     }
 
-    /// Advances the device clock and commits the cache once writes have paused.
-    /// Returns `true` when a commit happened.
+    /// Advances the device clock and commits every cached sector once writes have
+    /// paused. Returns `true` when at least one sector was programmed.
     pub fn tick(&mut self, now_ms: u64) -> bool {
         self.now_ms = now_ms;
         if self.dirty && now_ms.wrapping_sub(self.last_write_ms) >= IDLE_FLUSH_MS {
-            self.commit();
-            return true;
+            return self.commit_all();
         }
         false
     }
@@ -64,30 +84,67 @@ impl CachedFlashDevice {
         }
     }
 
-    /// Makes the sector containing `lba` the cached one, committing the previous one.
-    fn load(&mut self, lba: u32) {
-        let offset = Self::sector_offset(lba);
-        if self.cached == Some(offset) {
-            return;
-        }
-        self.commit();
-        self.flash.read(offset, &mut self.buf);
-        self.cached = Some(offset);
+    /// Slot index currently holding `offset`, if any.
+    fn find(&self, offset: u32) -> Option<usize> {
+        self.slots.iter().position(|s| s.offset == Some(offset))
     }
 
-    /// Writes the cached sector back if it changed.
-    fn commit(&mut self) {
-        if !self.dirty {
-            return;
+    /// Returns a slot holding `offset`, loading it from flash when it is not cached.
+    /// A load may have to commit and reuse another slot, but only when every slot is
+    /// already dirty (a write larger than the cache) — never for an ordinary upload.
+    fn slot_for(&mut self, offset: u32) -> usize {
+        if let Some(i) = self.find(offset) {
+            return i;
         }
-        if let Some(offset) = self.cached {
+        let i = self.pick_slot();
+        self.flash.read(offset, &mut self.slots[i].buf);
+        self.slots[i].offset = Some(offset);
+        self.slots[i].dirty = false;
+        i
+    }
+
+    /// Picks a slot to reuse: a free one, then a clean one, otherwise the round-robin
+    /// victim, which is committed first.
+    fn pick_slot(&mut self) -> usize {
+        if let Some(i) = self.slots.iter().position(|s| s.offset.is_none()) {
+            return i;
+        }
+        if let Some(i) = self.slots.iter().position(|s| !s.dirty) {
+            return i;
+        }
+        let i = self.next_victim;
+        self.next_victim = (self.next_victim + 1) % CACHE_SECTORS;
+        self.commit_slot(i);
+        i
+    }
+
+    /// Writes one slot back if it changed. Returns whether an erase happened.
+    fn commit_slot(&mut self, i: usize) -> bool {
+        if !self.slots[i].dirty {
+            return false;
+        }
+        let mut programmed = false;
+        if let Some(offset) = self.slots[i].offset {
             // Hosts often rewrite identical FAT/directory sectors; skip those erases.
-            if self.flash.view(offset, FLASH_SECTOR_SIZE) != self.buf {
+            if self.flash.view(offset, FLASH_SECTOR_SIZE) != self.slots[i].buf {
                 defmt::debug!("flash: program sector @ {=u32:#x}", offset);
-                self.flash.erase_and_program_sector(offset, &self.buf);
+                self.flash
+                    .erase_and_program_sector(offset, &self.slots[i].buf);
+                programmed = true;
             }
         }
+        self.slots[i].dirty = false;
+        programmed
+    }
+
+    /// Writes every dirty slot back. Returns whether any erase happened.
+    fn commit_all(&mut self) -> bool {
+        let mut programmed = false;
+        for i in 0..CACHE_SECTORS {
+            programmed |= self.commit_slot(i);
+        }
         self.dirty = false;
+        programmed
     }
 }
 
@@ -100,27 +157,30 @@ impl BlockDevice for CachedFlashDevice {
         Self::check(lba)?;
         let offset = VOLUME_OFFSET + lba * BLOCK_SIZE as u32;
         let sector = Self::sector_offset(lba);
-        if self.dirty && self.cached == Some(sector) {
-            let start = (offset - sector) as usize;
-            buf.copy_from_slice(&self.buf[start..start + BLOCK_SIZE]);
-        } else {
-            self.flash.read(offset, buf);
+        match self.find(sector) {
+            Some(i) if self.slots[i].dirty => {
+                let start = (offset - sector) as usize;
+                buf.copy_from_slice(&self.slots[i].buf[start..start + BLOCK_SIZE]);
+            }
+            _ => self.flash.read(offset, buf),
         }
         Ok(())
     }
 
     fn write_block(&mut self, lba: u32, buf: &Block) -> Result<(), BlockError> {
         Self::check(lba)?;
-        self.load(lba);
+        let sector = Self::sector_offset(lba);
+        let i = self.slot_for(sector);
         let start = ((lba % BLOCKS_PER_SECTOR) * BLOCK_SIZE as u32) as usize;
-        self.buf[start..start + BLOCK_SIZE].copy_from_slice(buf);
+        self.slots[i].buf[start..start + BLOCK_SIZE].copy_from_slice(buf);
+        self.slots[i].dirty = true;
         self.dirty = true;
         self.last_write_ms = self.now_ms;
         Ok(())
     }
 
     fn flush(&mut self) -> Result<(), BlockError> {
-        self.commit();
+        self.commit_all();
         Ok(())
     }
 }
