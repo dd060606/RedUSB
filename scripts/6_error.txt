@@ -1,0 +1,8 @@
+REM Test 6 - error handling: this script FAILS ON PURPOSE to show the error LED.
+REM Expected: the first lines type, then the device hits an invalid command and
+REM stops, flashing ORANGE (parse error). The final line must NOT appear.
+DELAY 1500
+STRINGLN === RedUSB test 6: expected parse error (orange LED) ===
+STRINGLN The next command is invalid on purpose...
+FROBNICATE this is not a real command
+STRINGLN BUG if you can read this - the script should have stopped above.

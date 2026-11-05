@@ -1,0 +1,25 @@
+REM Test 2 - keys and combos: ENTER, TAB, arrows, HOME/END, CTRL+A
+REM Expected: safe editing actions in a text editor. Nothing is launched or deleted.
+REM Give a text editor focus before this runs.
+DEFAULT_DELAY 150
+DELAY 1500
+STRINGLN === RedUSB test 2: keys and combos ===
+STRING abc
+ENTER
+STRING def
+DELAY 300
+REM jump to line start, step right twice, insert a marker, jump to end
+HOME
+RIGHT
+RIGHT
+STRING [mid]
+END
+DELAY 300
+REM select-all then move to end (no delete), proving CTRL+A fires
+CTRL a
+DELAY 400
+END
+ENTER
+STRINGLN Keys OK: enter, arrows, home/end, ctrl+a all fired.
+TAB
+STRINGLN (this line should start with a tab indent, proving TAB works)

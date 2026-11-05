@@ -1,0 +1,10 @@
+REM Test 1 - basic typing: STRING, STRINGLN, DELAY, DEFAULT_DELAY, REM
+REM Expected: three lines typed into the focused text field, with short pauses.
+REM Open a text editor and give it focus before this runs.
+DEFAULT_DELAY 200
+DELAY 1500
+STRINGLN === RedUSB test 1: basic typing ===
+STRING This line has no newline,
+STRINGLN then this completes it.
+DELAY 500
+STRINGLN Done. DEFAULT_DELAY paused 200ms between each command.

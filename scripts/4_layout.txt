@@ -1,0 +1,11 @@
+REM Test 4 - keyboard layout: LAYOUT FR vs US
+REM Expected: the same symbols typed twice. Only the line whose layout matches your
+REM host keyboard will print correctly. Set your OS keyboard to match, or compare both.
+DEFAULT_DELAY 120
+DELAY 1500
+STRINGLN === RedUSB test 4: layout ===
+LAYOUT FR
+STRINGLN [FR] mail: test.user@site.fr  path C:/dir  10% ok #1 (&)
+LAYOUT US
+STRINGLN [US] mail: test.user@site.us  path C:/dir  10% ok #1 (&)
+STRINGLN Whichever line reads correctly on your host, that layout matches.

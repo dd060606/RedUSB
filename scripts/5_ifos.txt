@@ -1,0 +1,20 @@
+REM Test 5 - OS detection: IF_OS / ELSE / END_IF (nested)
+REM Expected: one line naming the OS the device guessed during enumeration.
+REM Windows is reliable; Linux/macOS is a heuristic that still needs calibration.
+DEFAULT_DELAY 120
+DELAY 1500
+STRINGLN === RedUSB test 5: IF_OS ===
+IF_OS WINDOWS
+STRINGLN Detected host OS: WINDOWS
+ELSE
+IF_OS MAC
+STRINGLN Detected host OS: MAC
+ELSE
+IF_OS LINUX
+STRINGLN Detected host OS: LINUX
+ELSE
+STRINGLN Detected host OS: OTHER / UNKNOWN
+END_IF
+END_IF
+END_IF
+STRINGLN If this matches your real OS, IF_OS works.

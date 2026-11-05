@@ -1,0 +1,13 @@
+REM Test 7 - app-launch combo (GUI/Windows key). WINDOWS ONLY.
+REM WARNING: this OPENS THE RUN DIALOG and launches Notepad. Only select this one
+REM when you want to test the GUI key combo, since it auto-runs on plug.
+REM Expected: Run dialog opens, 'notepad' is typed, Notepad launches, text appears.
+DELAY 1500
+GUI r
+DELAY 800
+STRING notepad
+DELAY 400
+ENTER
+DELAY 2000
+STRINGLN === RedUSB test 7: GUI combo opened Notepad ===
+STRINGLN If you can read this in Notepad, GUI r + typing + ENTER all work.

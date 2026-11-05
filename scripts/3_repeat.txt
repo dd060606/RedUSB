@@ -1,0 +1,9 @@
+REM Test 3 - REPEAT: re-runs the previous command N more times
+REM Expected: 'ha' typed once, then REPEAT 5 re-runs it, so six 'ha' in total.
+DEFAULT_DELAY 100
+DELAY 1500
+STRINGLN === RedUSB test 3: REPEAT ===
+STRING ha
+REPEAT 5
+ENTER
+STRINGLN If you see 'ha' six times above, REPEAT works (1 run + 5 repeats).
