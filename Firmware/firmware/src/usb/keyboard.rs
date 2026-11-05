@@ -34,7 +34,7 @@ impl UsbKeyboard {
         let settings = HidClassSettings {
             subclass: HidSubClass::Boot,
             protocol: HidProtocol::Keyboard,
-            config: ProtocolModeConfig::DefaultBehavior,
+            config: ProtocolModeConfig::ForceBoot,
             locale: HidCountryCode::NotSupported,
         };
         let hid = HIDClass::new_ep_in_with_settings(
