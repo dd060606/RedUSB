@@ -133,6 +133,8 @@ pub struct RgbLed {
 const PWM_TOP: u16 = 255;
 /// 125 MHz / 20 / 256 gives a flicker-free 24 kHz PWM.
 const PWM_DIV: u8 = 20;
+/// Global brightness cap (0 = off, 255 = full).
+const MAX_BRIGHTNESS: u8 = 60;
 
 impl RgbLed {
     pub fn new(
@@ -194,6 +196,7 @@ impl RgbLed {
     }
 
     fn write(&mut self, color: Color) {
+        let color = color.scaled(MAX_BRIGHTNESS as u32, 255);
         let _ = self.pwm1.channel_b.set_duty_cycle(gamma(color.r));
         let _ = self.pwm2.channel_a.set_duty_cycle(gamma(color.g));
         let _ = self.pwm1.channel_a.set_duty_cycle(gamma(color.b));

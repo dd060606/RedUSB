@@ -9,7 +9,7 @@ use crate::storage::cached::CachedFlashDevice;
 use crate::usb::keyboard::UsbKeyboard;
 use redusb_core::catalog::ScriptCatalog;
 use redusb_core::fat::{FatError, FatVolume, FileReader};
-use redusb_core::script::{ByteSource, Interpreter};
+use redusb_core::script::{ByteSource, Interpreter, RunErrorKind};
 
 /// Red flash after a failed or missing script.
 const ERROR_FLASH_MS: u32 = 1500;
@@ -63,7 +63,7 @@ pub fn run(
                             );
                             board
                                 .led
-                                .flash(Color::RED, ERROR_FLASH_MS, millis(board.timer));
+                                .flash(error_color(&err.kind), ERROR_FLASH_MS, millis(board.timer));
                         }
                     }
                     board.led.set_pattern(idle);
@@ -80,6 +80,20 @@ pub fn run(
         }
 
         board.led.tick(now);
+    }
+}
+
+/// Colour of the error flash:
+/// * magenta — a keystroke timed out (the host never fetched the HID report).
+/// * orange  — a script line could not be parsed.
+/// * yellow  — the script file could not be read from flash.
+/// * cyan    — malformed `IF_OS` / `ELSE` / `END_IF` structure.
+fn error_color<E>(kind: &RunErrorKind<E>) -> Color {
+    match kind {
+        RunErrorKind::Sink(_) => Color::MAGENTA,
+        RunErrorKind::Parse(_) => Color::ORANGE,
+        RunErrorKind::Line(_) => Color::YELLOW,
+        RunErrorKind::Control(_) => Color::CYAN,
     }
 }
 
