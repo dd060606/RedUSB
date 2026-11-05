@@ -1,8 +1,5 @@
-//! Raw access to the QSPI flash.
-//!
-//! Reads go through the memory-mapped XIP window. Erase and program operations
-//! run from RAM with interrupts disabled, because the flash cannot serve
-//! instruction fetches while it is busy.
+//! Raw QSPI flash access. Reads go through the memory-mapped XIP window; erase and
+//! program run from RAM with interrupts disabled, since the flash can't serve XIP then.
 
 use super::layout::{FLASH_PAGE_SIZE, FLASH_SECTOR_SIZE, FLASH_SIZE};
 use portable_atomic::{AtomicBool, Ordering};
@@ -34,8 +31,7 @@ impl Flash {
             offset as usize + len <= FLASH_SIZE as usize,
             "flash read out of range"
         );
-        // SAFETY: the XIP window maps the whole flash read-only; the range is checked,
-        // and the returned borrow is tied to `&self`, so no write can overlap it.
+        // SAFETY: XIP maps the whole flash read-only, the range is checked, and the borrow ties to `&self`.
         unsafe { core::slice::from_raw_parts((XIP_BASE + offset as usize) as *const u8, len) }
     }
 
@@ -55,8 +51,7 @@ impl Flash {
             "sector out of range"
         );
         cortex_m::interrupt::free(|_| {
-            // SAFETY: interrupts are off, this is the only core running code, `data`
-            // lives in RAM and the range is aligned and inside the flash.
+            // SAFETY: interrupts off, single core running, `data` in RAM, range aligned and in flash.
             unsafe { rp2040_flash::flash::flash_range_erase_and_program(offset, data, USE_BOOT2) }
         });
     }

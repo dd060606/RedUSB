@@ -1,9 +1,5 @@
-//! Executes parsed script lines against an abstract keyboard.
-//!
-//! Besides typing, the interpreter supports `IF_OS` / `ELSE` / `END_IF` blocks that
-//! run only on a given host operating system. The current OS is supplied by the
-//! firmware with [`Interpreter::set_host_os`] (see [`crate::os`]); when it is
-//! [`Os::Unknown`], only `IF_OS OTHER` / `ELSE` branches run.
+//! Executes parsed script lines against an abstract keyboard, including `IF_OS` /
+//! `ELSE` / `END_IF` blocks gated on the host OS set via [`Interpreter::set_host_os`].
 
 use super::keys::{KeyStroke, usage};
 use super::layout::Layout;

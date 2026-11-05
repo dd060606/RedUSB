@@ -1,15 +1,5 @@
-//! Line parser for the Ducky Script dialect understood by the device.
-//!
-//! Supported lines:
-//! * `REM text` and blank lines: ignored.
-//! * `STRING text` / `STRINGLN text`: type text, the latter followed by ENTER.
-//! * `DELAY ms`, `DEFAULT_DELAY ms` (also `DEFAULTDELAY`).
-//! * `REPEAT n`: run the previous command again `n` times.
-//! * `LAYOUT US|FR`: layout used by `STRING`, defaults to the firmware setting.
-//! * `IF_OS WINDOWS|MAC|LINUX|OTHER` .. `ELSE` .. `END_IF`: run a block only on a
-//!   given host OS (see [`crate::os`]).
-//! * Key combos: modifiers followed by at most one key, e.g. `CTRL ALT t`, `GUI r`,
-//!   `CTRL-SHIFT ESC`, `ENTER`, `F5`, `DOWNARROW`.
+//! Line parser for the device's Ducky Script dialect: comments, `STRING`/`STRINGLN`,
+//! delays, `REPEAT`, `LAYOUT`, `IF_OS`/`ELSE`/`END_IF` blocks and key combos.
 
 use super::keys::{KeyStroke, key_by_name, modifier_by_name};
 use super::layout::Layout;

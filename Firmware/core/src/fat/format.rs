@@ -56,9 +56,7 @@ fn compute_layout(p: &FormatParams) -> Result<Layout, FatError> {
     if p.total_sectors <= fixed + p.sectors_per_cluster as u32 {
         return Err(FatError::DeviceTooSmall);
     }
-    // First guess the cluster count ignoring the FATs, size the FATs for it, then
-    // recompute the real cluster count. The guess is an upper bound so the FAT is
-    // always large enough; iterate once more in case the FAT type flipped.
+    // Size the FATs from an upper-bound cluster guess, iterating in case the FAT type flipped.
     let mut fat_type = FatType::Fat12;
     let mut sectors_per_fat = 0u32;
     for _ in 0..3 {

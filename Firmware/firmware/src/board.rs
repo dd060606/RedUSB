@@ -1,16 +1,7 @@
-//! Board support for the RedUSB PCB (Adafruit KB2040).
-//!
-//! Pin assignment:
-//!
-//! | Signal          | KB2040 | GPIO | Peripheral |
-//! |-----------------|--------|------|------------|
-//! | LED blue        | D2     | 2    | PWM1 A     |
-//! | LED red         | D3     | 3    | PWM1 B     |
-//! | LED green       | D4     | 4    | PWM2 A     |
-//! | Push button     | D5     | 5    | SIO input, pull-up, active low |
-//! | Mode switch     | D8     | 8    | SIO input, pull-up, low = configuration mode |
-//!
-//! The RGB LED is common anode, so every colour channel is active low.
+//! Board support for the RedUSB PCB (Adafruit KB2040): sets up clocks, the common-
+//! anode RGB LED (blue=GPIO2, red=GPIO3, green=GPIO4, active low), the button
+//! (GPIO5) and mode switch (GPIO8, low = config) as pulled-up active-low inputs,
+//! the timer and the USB bus.
 
 use crate::button::Button;
 use crate::led::RgbLed;

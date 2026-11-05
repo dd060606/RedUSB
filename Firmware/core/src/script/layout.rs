@@ -1,8 +1,5 @@
-//! Character to key stroke translation for the supported host keyboard layouts.
-//!
-//! The host interprets scan codes according to its own layout, so typing text
-//! correctly requires knowing which physical key produces each character there.
-//! Characters that need a dead key are expanded into two strokes.
+//! Character-to-keystroke translation per host keyboard layout (US, FR). The host
+//! decodes scan codes by its own layout; dead-key characters expand into two strokes.
 
 use super::keys::{KeyStroke, usage};
 

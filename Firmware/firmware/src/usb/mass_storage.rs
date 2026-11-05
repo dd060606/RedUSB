@@ -1,9 +1,6 @@
 //! USB mass-storage drive (SCSI over Bulk-Only Transport) exposing the flash volume.
-//!
-//! `usbd-storage` handles the transport and command parsing; this module answers
-//! the SCSI commands against the [`CachedFlashDevice`]. Data phases larger than the
-//! transport buffer are served across several `poll` calls, so the handler keeps
-//! the progress of the current command in [`Handler`].
+//! `usbd-storage` handles the transport; this module answers SCSI commands against the
+//! [`CachedFlashDevice`], keeping per-command progress in [`Handler`] across polls for large transfers.
 
 use super::{PID_STORAGE, build_device};
 use crate::storage::cached::CachedFlashDevice;

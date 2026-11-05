@@ -1,7 +1,5 @@
-//! Persisted settings, stored as an append-only log in the last flash sector.
-//!
-//! Each record occupies one 256-byte page. A new record is programmed into the
-//! next blank page, so the sector is erased only once every 16 saves.
+//! Persisted settings as an append-only log in the last flash sector: each record is
+//! one 256-byte page written to the next blank page, so the sector erases once per 16 saves.
 
 use super::flash::Flash;
 use super::layout::{FLASH_PAGE_SIZE, FLASH_SECTOR_SIZE, SETTINGS_OFFSET};

@@ -1,8 +1,5 @@
-//! Ducky Script compatible macro engine.
-//!
-//! * [`parser`] turns one text line into a [`Command`].
-//! * [`layout`] converts characters to HID key strokes for a given keyboard layout.
-//! * [`interpreter`] executes a stream of lines against a [`KeyboardSink`].
+//! Ducky Script macro engine: [`parser`] reads a line into a [`Command`], [`layout`]
+//! maps characters to HID strokes, and [`interpreter`] runs a line stream.
 
 pub mod interpreter;
 pub mod keys;

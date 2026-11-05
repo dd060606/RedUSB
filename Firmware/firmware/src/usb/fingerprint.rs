@@ -1,11 +1,7 @@
-//! Passive USB class that guesses the host OS from its enumeration requests.
-//!
-//! It allocates no interface and no endpoints. It only watches control-IN
-//! transfers, records every device-directed `GET_DESCRIPTOR`, and never accepts a
-//! transfer, so `usb-device` still answers each request normally. Placed first in
-//! the class list, it sees every request before the real class does.
-//!
-//! See [`redusb_core::os`] for how the collected [`Fingerprint`] becomes an [`Os`].
+//! Passive USB class that guesses the host OS from enumeration requests. It adds no
+//! interface or endpoint and never accepts a transfer, only recording each device
+//! `GET_DESCRIPTOR`; placed first in the class list it sees every request first.
+//! See [`redusb_core::os`] for how the [`Fingerprint`] becomes an [`Os`].
 
 use redusb_core::os::{Fingerprint, Os};
 use rp2040_hal::usb::UsbBus;

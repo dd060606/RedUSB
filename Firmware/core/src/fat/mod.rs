@@ -1,10 +1,6 @@
-//! Minimal FAT12/FAT16 support: mounting, root directory listing, sequential file
-//! reads and volume formatting.
-//!
-//! Only what the firmware needs is implemented: 8.3 names in the root directory,
-//! read-only file access and a formatter used to initialise the flash volume.
-//! Long file names are skipped, but the 8.3 alias the host always writes alongside
-//! them is used instead.
+//! Minimal read-only FAT12/FAT16 support: mount, root-directory listing, sequential
+//! file reads and a formatter for the flash volume. Long file names are skipped in
+//! favour of the 8.3 alias the host writes alongside them.
 
 mod bpb;
 mod dir;

@@ -1,6 +1,5 @@
-//! USB personalities: a HID keyboard in normal mode, a mass-storage drive in
-//! configuration mode. Both share the vendor ID and strings; the product ID
-//! differs so hosts never reuse a cached descriptor from the other mode.
+//! USB personalities: a HID keyboard (normal mode) and a mass-storage drive (config
+//! mode), sharing the vendor ID but differing in product ID so hosts don't reuse a cached descriptor.
 
 pub mod fingerprint;
 pub mod keyboard;

@@ -1,18 +1,8 @@
-//! Host operating system detection from USB enumeration behaviour.
+//! Host OS detection from the pattern of `GET_DESCRIPTOR` requests at enumeration.
 //!
-//! A USB device cannot ask the host what operating system it is, but the sequence
-//! of `GET_DESCRIPTOR` requests a host makes while enumerating the device is
-//! characteristic of the OS. The firmware feeds every such request into a
-//! [`Fingerprint`], which [`Fingerprint::classify`] turns into a best-guess [`Os`].
-//!
-//! Reliability, in short:
-//! * **Windows** is detected reliably: it is the only OS that probes for the
-//!   Microsoft OS string descriptor at string index `0xEE`.
-//! * **Linux vs macOS** is only a heuristic based on how many times the host reads
-//!   the configuration descriptor. The thresholds ([`LINUX_MIN_CONFIG_REQUESTS`])
-//!   should be confirmed against the real machines you use; the firmware logs the
-//!   raw counters over defmt so you can calibrate them.
-//! * Anything unrecognised stays [`Os::Unknown`], which scripts handle with `ELSE`.
+//! Windows is reliable (it alone probes the Microsoft OS string descriptor at index
+//! `0xEE`); Linux vs macOS is only a config-read-count heuristic that needs
+//! calibrating on real hardware; anything else stays [`Os::Unknown`] (handled by `ELSE`).
 
 /// Standard USB descriptor type codes (the high byte of a `GET_DESCRIPTOR` value).
 pub mod descriptor_type {
@@ -70,11 +60,7 @@ impl Os {
     }
 }
 
-/// Counts of the descriptor requests seen during one enumeration.
-///
-/// The firmware calls [`Fingerprint::observe_get_descriptor`] for every
-/// device-directed `GET_DESCRIPTOR` request; [`Fingerprint::classify`] reads the
-/// result.
+/// Counts of the `GET_DESCRIPTOR` requests seen during one enumeration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Fingerprint {
     /// The host asked for the Microsoft OS string descriptor (index `0xEE`).
@@ -204,8 +190,7 @@ mod tests {
         assert!(!fp.is_empty());
     }
 
-    // Current heuristic thresholds for non-Windows hosts. These pin the documented
-    // behaviour; adjust them (and this test) after calibrating on real hardware.
+    // Pins the current non-Windows thresholds; retune with the heuristic after hardware calibration.
     #[test]
     fn non_windows_config_read_heuristic() {
         let with_config = |n: u16| {

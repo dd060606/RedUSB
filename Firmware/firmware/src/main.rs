@@ -1,12 +1,6 @@
-//! RedUSB firmware entry point.
-//!
-//! Boot flow:
-//! 1. Bring up clocks, pins, PWM, timer and the USB bus (`board`).
-//! 2. Read the mode switch. In configuration mode, a button held at power-up
-//!    reboots into the RP2040 UF2 bootloader.
-//! 3. Mount the FAT volume kept in flash (formatting it in configuration mode if
-//!    it is blank), load the persisted script selection and build the catalog.
-//! 4. Hand over to the mode-specific superloop, which never returns.
+//! RedUSB firmware entry point: brings up the board, picks a mode from the switch
+//! (button held at power-up reboots to the UF2 bootloader), mounts the flash FAT
+//! volume and script catalog, then hands over to the mode superloop.
 
 #![no_std]
 #![no_main]

@@ -1,11 +1,5 @@
-//! Flash memory map (offsets relative to the start of flash).
-//!
-//! | Offset       | Size        | Use                          |
-//! |--------------|-------------|------------------------------|
-//! | `0x00_0000`  | 1 MiB       | Firmware (see `memory.x`)    |
-//! | `0x10_0000`  | 7,274,496 B | FAT volume exposed over USB  |
-//! | `0x7F_0000`  | 60 KiB      | Reserved                     |
-//! | `0x7F_F000`  | 4 KiB       | Settings                     |
+//! Flash memory map: 1 MiB firmware, then the ~7.1 MiB FAT volume exposed over USB,
+//! 60 KiB reserved, and a 4 KiB settings sector at the top of the 8 MiB device.
 
 use redusb_core::block::BLOCK_SIZE;
 
